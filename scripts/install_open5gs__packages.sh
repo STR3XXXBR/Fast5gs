@@ -26,14 +26,56 @@ elif [[ "$OS_ID" == "debian" ]]; then
         apt-get update -y >/dev/null 2>&1 || log_warn "apt update failed (continuing...)"
         apt-get install -y wget gnupg curl || { log_error "Failed to install prerequisite packages (wget, gnupg, curl)"; exit 1; }
         mkdir -p /etc/apt/keyrings
-        DEBIAN_VERSION_NUM="12"
-        REPO_URL="https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_${DEBIAN_VERSION_NUM}/Release.key"
-        REPO_LIST_ENTRY="deb [signed-by=/etc/apt/keyrings/open5gs.gpg] http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_${DEBIAN_VERSION_NUM}/ ./"
-        log_info "Using repository for Debian $DEBIAN_VERSION_NUM"
-        curl -fsSL "$REPO_URL" | gpg --dearmor -o /etc/apt/keyrings/open5gs.gpg
-        if [ $? -ne 0 ]; then log_error "Failed to download or dearmor Open5GS GPG key from $REPO_URL"; exit 1; fi
-        echo "$REPO_LIST_ENTRY" > /etc/apt/sources.list.d/open5gs.list
+        
+        # --- CORREÇÃO DA CHAVE GPG ---
+        log_info "Installing Open5GS repository with local GPG key..."
+        
+        # Criar o arquivo da chave GPG manualmente
+        cat > /tmp/open5gs-key.gpg << 'EOF'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+
+mQENBFyXC1QBCACtYMjUVxsS3orVeB2a1uQfPxxCpXHCC9f32HqdWUs+TpqIgENL
+D7+pkKLl3CQyyKegr0SFmXfN4TFAID9AAb6LTFCyVsTTZzgynWHIF5dnNflJ3c3j
+QGDFL8HXMETzfutLnGcPvhbgHp3GxRYBh8X2A6UgBxrOWm7pjRu94NXyRPQJKlle
+Om7EUBBhKMDidhWLyXOEhIF+Mqjf4S8/gMdCitNCEVQkkMmqUBxwBe7vHQhZn4Qc
+YvZQ1PGjQrNc4cJQwqt4phSbm+WHY9Fk30ZM/tu6fzqu87miADI8HkUcIy1pHCIr
+e0Lp+9AGqvGJ2SbTE/nvJMNxq4OE0BBUJOPrABEBAAG0OmhvbWU6YWNldGNvbSBP
+QlMgUHJvamVjdCA8aG9tZTphY2V0Y29tQGJ1aWxkLm9wZW5zdXNlLm9yZz6JAT4E
+EwEIACgFAmSx0FECGwMFCQw5dP0GCwkIBwMCBhUIAgkKCwQWAgMBAh4BAheAAAoJ
+EP5/QvJ2zuDmkiIH/A/nx9cxpLZsKd7zmDqjy/EwB7AyZrsF5Hc0NMorj2vrVU+J
+eAydHsX1as6o13EXJ/k0gpa7rB7s07xczTN5ZIy/S37NAyHHWmd+UPHIYKa9abed
+80zbulQe/dLJp9pdxTzxFt1DwtJckTKaHCajhAEiqTABVBYIz8kEtc9clIW4lLYz
+woMhd66+ATB7MhvyfcR3kxErgkLNw/Pn8P9xTLLnE75GDd2und4Hj2Ji38YOgNG3
+t+Tp3ypK2kVuzHan/FZY2yZlS87SwUoQl73fUra1DA5OhN+rcPPEeOtg/HAHKW9B
+IHXth25e4pjxgrGA8kNwkH6OCrlfCtDGx40fNDyIRgQTEQIABgUCXJcLVAAKCRA7
+MBG3a51lIyaWAJ9wyjrzgQhWjd0Tu6/6x317rneKYgCfS8Q8EmQ2NZcf7Wf6cvUz
+rYjHjVo=
+=QLhs
+-----END PGP PUBLIC KEY BLOCK-----
+EOF
+
+        # Instalar a chave
+        gpg --dearmor /tmp/open5gs-key.gpg > /etc/apt/keyrings/open5gs.gpg
+        if [ $? -ne 0 ]; then 
+            log_error "Failed to process Open5GS GPG key"
+            # Fallback: tentar método alternativo
+            log_info "Trying alternative GPG key method..."
+            wget -qO - http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/Release.key | gpg --dearmor > /etc/apt/keyrings/open5gs.gpg 2>/dev/null || {
+                log_error "All GPG key methods failed"
+                exit 1
+            }
+        fi
+        
+        # Adicionar repositório
+        echo "deb [signed-by=/etc/apt/keyrings/open5gs.gpg] http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/ ./" > /etc/apt/sources.list.d/open5gs.list
         if [ $? -ne 0 ]; then log_error "Failed to write Open5GS sources list"; exit 1; fi
+        
+        # Limpar arquivo temporário
+        rm -f /tmp/open5gs-key.gpg
+        log_info "Open5GS repository configured with local GPG key"
+        # --- FIM DA CORREÇÃO ---
+        
     else
         log_error "Unsupported Debian version: $OS_VERSION_ID. Only Debian 12 is supported by this script."
         exit 1
